@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulador de Filas - Starbucks</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f4f0;color:#20211f;margin:0}.wrap{max-width:1150px;margin:auto;padding:25px}
+h1{margin:0 0 6px}.muted{color:#666}.grid{display:grid;grid-template-columns:340px 1fr;gap:18px}.card{background:white;border:1px solid #ddd;border-radius:14px;padding:18px;margin-bottom:18px}
+.row{display:grid;grid-template-columns:1fr 115px;gap:8px;align-items:center;margin:9px 0}input,select,button{padding:9px;border:1px solid #ccc;border-radius:8px}button{cursor:pointer;background:#087f5b;color:white;font-weight:bold;width:100%;margin-top:8px}button.alt{background:#eee;color:#222}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.kpi{background:#fafaf7;border:1px solid #ddd;border-radius:10px;padding:12px}.kpi b{font-size:24px;display:block}.small{font-size:12px;color:#666}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.box{text-align:center;padding:14px;border:1px solid #ddd;border-radius:10px}.num{font-size:28px;font-weight:bold}
+canvas{width:100%;height:260px;border:1px solid #ddd;border-radius:10px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #ddd;text-align:left}
+@media(max-width:850px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.flow{grid-template-columns:1fr 1fr}}
+</style></head>
+<body><div class="wrap">
+<h1>Simulador de filas · Starbucks</h1><p class="muted">Simulación de eventos discretos con llegada variable de clientes, dos estaciones y comparación de capacidad.</p>
+<div class="grid"><aside>
+<div class="card"><h2>Configuración</h2>
+<div class="row"><label>Cajeros</label><input id="cash" type="number" min="1" value="3"></div>
+<div class="row"><label>Baristas</label><input id="bar" type="number" min="1" value="2"></div>
+<div class="row"><label>Duración (min)</label><input id="dur" type="number" min="10" value="120"></div>
+<h3>Llegadas</h3>
+<select id="mode" onchange="toggleMode()"><option value="constant">Tasa constante</option><option value="schedule">Por horario</option></select>
+<div id="constant"><div class="row"><label>λ clientes/h</label><input id="lambda" type="number" min="1" value="55"></div></div>
+<div id="schedule" style="display:none">
+<p class="small">Tasas promedio por franja. La llegada real es aleatoria.</p>
+<div class="row"><label>08–10</label><input id="r1" value="30" type="number"></div>
+<div class="row"><label>10–12</label><input id="r2" value="45" type="number"></div>
+<div class="row"><label>12–14</label><input id="r3" value="65" type="number"></div>
+<div class="row"><label>14–17</label><input id="r4" value="40" type="number"></div>
+<div class="row"><label>17–20</label><input id="r5" value="60" type="number"></div>
+<div class="row"><label>20–22</label><input id="r6" value="30" type="number"></div></div>
+<h3>Tiempos medios</h3>
+<div class="row"><label>Atención caja (min)</label><input id="tc" value="1.25" type="number" step=".05"></div>
+<div class="row"><label>Preparación (min)</label><input id="tp" value="2.40" type="number" step=".05"></div>
+<h3>Economía</h3>
+<div class="row"><label>Costo cajero/h</label><input id="cc" value="6000" type="number"></div>
+<div class="row"><label>Costo barista/h</label><input id="cb" value="7000" type="number"></div>
+<div class="row"><label>Ingreso/pedido</label><input id="rev" value="15000" type="number"></div>
+<button onclick="simulate()">▶ Ejecutar simulación</button><button class="alt" onclick="location.reload()">↻ Reiniciar</button>
+</div></aside>
+<main>
+<div class="kpis"><div class="kpi"><b id="arr">0</b><span>Arribos</span></div><div class="kpi"><b id="done">0</b><span>Entregados</span></div><div class="kpi"><b id="wait">0.0 min</b><span>Espera promedio</span></div><div class="kpi"><b id="bott">—</b><span>Cuello de botella</span></div></div>
+<div class="card"><h2>Estado del sistema</h2><div class="flow">
+<div class="box">👤<br><b>Llegadas</b><div class="num" id="a2">0</div></div>
+<div class="box">💵<br><b>Fila caja</b><div class="num" id="qc">0</div></div>
+<div class="box">☕<br><b>Fila preparación</b><div class="num" id="qp">0</div></div>
+<div class="box">✓<br><b>Entrega</b><div class="num" id="d2">0</div></div></div>
+<p><b>Reloj:</b> <span id="clock">0:00</span> · <span id="status">Listo</span></p></div>
+<div class="card"><h2>Evolución de las filas</h2><canvas id="chart" width="850" height="260"></canvas><p class="small">Verde = fila de caja · naranja = fila de preparación.</p></div>
+<div class="card"><h2>Capacidad teórica</h2><table><tr><th>Estación</th><th>Servidores</th><th>Capacidad</th><th>Utilización teórica</th></tr>
+<tr><td>Caja</td><td id="ctc">3</td><td id="capc">144/h</td><td id="uc">—</td></tr><tr><td>Preparación</td><td id="ctp">2</td><td id="capp">50/h</td><td id="up">—</td></tr></table><p id="decision" class="muted">Ejecutá una simulación.</p></div>
+<div class="card"><h2>Resultado económico</h2><div class="kpis"><div class="kpi"><b id="income">$0</b><span>Ingresos</span></div><div class="kpi"><b id="labor">$0</b><span>Costo laboral</span></div><div class="kpi"><b id="profit">$0</b><span>Resultado</span></div><div class="kpi"><b id="cpo">$0</b><span>Costo/pedido</span></div></div></div>
+</main></div></div>
+<script>
+function toggleMode(){let s=document.getElementById("mode").value==="schedule";document.getElementById("constant").style.display=s?"none":"block";document.getElementById("schedule").style.display=s?"block":"none"}
+function exp(mean){return -mean*Math.log(Math.random())}
+function rate(t){if(document.getElementById("mode").value==="constant")return +lambda.value;let x=t%840;return x<120?+r1.value:x<240?+r2.value:x<360?+r3.value:x<540?+r4.value:x<720?+r5.value:+r6.value}
+function service(mean){return mean*(.75+.5*Math.random())}
+function simulate(){
+let C=+cash.value,B=+bar.value,D=+dur.value,Tc=+tc.value,Tp=+tp.value;
+let cashQ=[],prepQ=[],cb=Array(C).fill(null),pb=Array(B).fill(null),events=[],t=0,last=0,arr=0,done=0,wait=0,ca=0,pa=0,h=[{t:0,qc:0,qp:0}];
+let next=exp(60/rate(0));
+while(next<=D){events.push({t:next,type:"arr"});let rr=rate(next);next+=exp(60/rr)}
+events.sort((a,b)=>a.t-b.t);
+function advance(nt){let dt=nt-last;ca+=cb.filter(Boolean).length*dt;pa+=pb.filter(Boolean).length*dt;t=nt;last=nt;if(!h.length||nt-h[h.length-1].t>=2)h.push({t:nt,qc:cashQ.length,qp:prepQ.length})}
+while(events.length){let e=events.shift();if(e.t>D)break;advance(e.t);
+if(e.type==="arr"){arr++;let i=cb.findIndex(x=>x===null);let p={id:arr,arr:e.t};if(i>=0){cb[i]=p;events.push({t:e.t+service(Tc),type:"cash",i,p})}else cashQ.push(p)}
+else if(e.type==="cash"){cb[e.i]=null;let p=e.p;let i=pb.findIndex(x=>x===null);if(i>=0){p.ps=e.t;wait+=p.ps-p.arr;pb[i]=p;events.push({t:e.t+service(Tp),type:"prep",i,p})}else prepQ.push(p);
+if(cashQ.length){let n=cashQ.shift();cb[e.i]=n;events.push({t:e.t+service(Tc),type:"cash",i:e.i,p:n})}}
+else{pb[e.i]=null;done++;if(prepQ.length){let n=prepQ.shift();n.ps=e.t;wait+=n.ps-n.arr;pb[e.i]=n;events.push({t:e.t+service(Tp),type:"prep",i:e.i,p:n})}}events.sort((a,b)=>a.t-b.t)}
+advance(D);let capC=60/Tc*C,capP=60/Tp*B,uC=ca/(D*C)*100,uP=pa/(D*B)*100;
+arrEl=arr;document.getElementById("arr").textContent=arr;document.getElementById("a2").textContent=arr;document.getElementById("done").textContent=done;document.getElementById("d2").textContent=done;document.getElementById("qc").textContent=cashQ.length;document.getElementById("qp").textContent=prepQ.length;
+document.getElementById("wait").textContent=(done?wait/done:0).toFixed(1)+" min";document.getElementById("bott").textContent=uP>uC?"Preparación":"Caja";document.getElementById("clock").textContent=Math.floor(D/60)+":"+String(D%60).padStart(2,"0");document.getElementById("status").textContent="Simulación finalizada";
+document.getElementById("ctc").textContent=C;document.getElementById("ctp").textContent=B;document.getElementById("capc").textContent=capC.toFixed(0)+"/h";document.getElementById("capp").textContent=capP.toFixed(0)+"/h";document.getElementById("uc").textContent=uC.toFixed(1)+"%";document.getElementById("up").textContent=uP.toFixed(1)+"%";
+let income=done*+rev.value,labor=(C*+cc.value+B*+cb.value)*D/60,profit=income-labor;document.getElementById("income").textContent=money(income);document.getElementById("labor").textContent=money(labor);document.getElementById("profit").textContent=money(profit);document.getElementById("cpo").textContent=money(done?labor/done:0);
+document.getElementById("decision").innerHTML="<b>Conclusión:</b> "+(uP>uC?"preparación presenta mayor utilización; evaluar aumentar baristas.":"caja presenta mayor utilización; evaluar aumentar cajeros.")+" La decisión final debe considerar costo y nivel de servicio.";draw(h)}
+function money(x){return new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(x)}
+function draw(h){let c=chart,x=c.getContext("2d"),w=c.width,hh=c.height;x.clearRect(0,0,w,hh);if(!h.length)return;let mx=Math.max(5,...h.map(p=>Math.max(p.qc,p.qp))),T=h[h.length-1].t||1;x.strokeStyle="#ddd";for(let i=0;i<5;i++){let y=20+i*(hh-45)/4;x.beginPath();x.moveTo(35,y);x.lineTo(w-10,y);x.stroke()}function line(k,col){x.strokeStyle=col;x.lineWidth=3;x.beginPath();h.forEach((p,i)=>{let xx=35+p.t/T*(w-45),yy=hh-25-p[k]/mx*(hh-50);i?x.lineTo(xx,yy):x.moveTo(xx,yy)});x.stroke()}line("qc","#087f5b");line("qp","#d97706");x.fillStyle="#555";x.font="12px Arial";x.fillText("Fila caja",45,15);x.fillText("Fila preparación",120,15)}
+</script></body></html>
