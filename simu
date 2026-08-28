@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Filas - Starbucks (Demanda Variable)</title>
+    <style>
+        :root {
+            --primary: #00704A; /* Verde Starbucks */
+            --secondary: #1e3932;
+            --background: #f9f9f9;
+            --card-bg: #ffffff;
+            --text-main: #212121;
+            --text-muted: #666666;
+            --border: #e0e0e0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        header h1 {
+            color: var(--secondary);
+            margin-bottom: 5px;
+        }
+
+        header p {
+            color: var(--text-muted);
+            margin-top: 0;
+        }
+
+        .panel-control {
+            background: #f4f6f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--secondary);
+        }
+
+        .control-group input, .control-group select {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        button.btn-simular {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            grid-column: 1 / -1;
+            transition: background 0.2s;
+        }
+
+        button.btn-simular:hover {
+            background-color: var(--secondary);
+        }
+
+        .resultados {
+            margin-top: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .card-resultado {
+            background: #fff;
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .card-resultado h3 {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .card-resultado .valor {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin: 10px 0 0 0;
+        }
+
+        .alerta-cuello {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            border-radius: 4px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Simulador Starbucks · Dinámica de Filas</h1>
+        <p>Sistema de dos estaciones con demanda de clientes modificable</p>
+    </header>
+
+    <div class="panel-control">
+        <div class="control-group">
+            <label for="cajeros">Cantidad de Cajeros:</label>
+            <input type="number" id="cajeros" value="3" min="1" max="6">
+        </div>
+
+        <div class="control-group">
+            <label for="baristas">Cantidad de Baristas:</label>
+            <input type="number" id="baristas" value="2" min="1" max="6">
+        </div>
+
+        <div class="control-group">
+            <label for="demanda">Demanda (Clientes / hora):</label>
+            <input type="number" id="demanda" value="60" min="10" max="150" step="5">
+        </div>
+
+        <button class="btn-simular" onclick="ejecutarSimulacion()">Ejecutar Simulación (60 min)</button>
+    </div>
+
+    <div class="resultados" id="panelResultados">
+        <div class="card-resultado">
+            <h3>Pedidos Entregados</h3>
+            <p class="valor" id="resPedidos">--</p>
+        </div>
+        <div class="card-resultado">
+            <h3>Rendimiento</h3>
+            <p class="valor" id="resRendimiento">--</p>
+        </div>
+        <div class="card-resultado">
+            <h3>Costo Laboral Total</h3>
+            <p class="valor" id="resCosto">--</p>
+        </div>
+        <div class="card-resultado">
+            <h3>Resultado Económico</h3>
+            <p class="valor" id="resBeneficio">--</p>
+        </div>
+    </div>
+
+    <div class="alerta-cuello" id="resCuelloBotella">
+        Configura los parámetros y haz clic en "Ejecutar Simulación" para ver el análisis del cuello de botella y rentabilidad.
+    </div>
+</div>
+
+<script>
+function ejecutarSimulacion() {
+    // 1. Obtener valores de los inputs
+    const numCajeros = parseInt(document.getElementById('cajeros').value);
+    const numBaristas = parseInt(document.getElementById('baristas').value);
+    const tasaLlegada = parseInt(document.getElementById('demanda').value);
+
+    // Parámetros operativos fijos (basados en los tiempos observados del sistema original)
+    // Caja: ~1.25 min por pedido (75 seg) -> Capacidad máx por cajero = 48 ped/h
+    // Preparación: ~2.4 min por pedido (144 seg) -> Capacidad máx por barista = 25 ped/h
+    const tiempoCajaMin = 1.25;
+    const tiempoPreparacionMin = 2.4;
+
+    // Costos por hora
+    const costoCajeroHora = 6000;
+    const costoBaristaHora = 7000;
+    const ingresoPorPedido = 15000;
+
+    // 2. Simulación simplificada por eventos discretos (horizonte de 60 minutos)
+    let tiempoMax = 60;
+    let colaCaja = 0;
+    let colaPrep = 0;
+    let cajerosLibresEn = new Array(numCajeros).fill(0);
+    let baristasLibresEn = new Array(numBaristas).fill(0);
+    let clientesEntregados = 0;
+    
+    // Generación de llegadas deterministas/estocásticas aproximadas por minuto
+    let intervaloLlegada = 60 / tasaLlegada;
+    let proximaLlegada = intervaloLlegada;
+
+    // Eventos simulados minuto a minuto (pasos de 0.1 min para precisión)
+    for (let t = 0; t <= tiempoMax; t += 0.1) {
+        // Llegada de cliente
+        if (t >= proximaLlegada && t <= 55) { // Cortamos llegadas cerca del final para vaciar filas
+            colaCaja++;
+            proximaLlegada = t + intervaloLlegada;
+        }
+
+        // Procesar Caja
+        for (let i = 0; i < numCajeros; i++) {
+            if (cajerosLibresEn[i] <= t && colaCaja > 0) {
+                colaCaja--;
+                cajerosLibresEn[i] = t + tiempoCajaMin;
+                colaPrep++; // Pasa a la cola de preparación
+            }
+        }
+
+        // Procesar Preparación (Baristas)
+        for (let j = 0; j < numBaristas; j++) {
+            if (baristasLibresEn[j] <= t && colaPrep > 0) {
+                colaPrep--;
+                baristasLibresEn[j] = t + tiempoPreparacionMin;
+                clientesEntregados++;
+            }
+        }
+    }
+
+    // 3. Cálculos Económicos y de Capacidad
+    const costoTotalLaboral = (numCajeros * costoCajeroHora) + (numBaristas * costoBaristaHora);
+    const ingresosEstimados = clientesEntregados * ingresoPorPedido;
+    const resultadoEconomico = ingresosEstimados - costoTotalLaboral;
+
+    // Detección teórica de cuello de botella
+    const capacidadCajaTotal = numCajeros * (60 / tiempoCajaMin);
+    const capacidadPrepTotal = numBaristas * (60 / tiempoPreparacionMin);
+    
+    let cuelloBotella = "";
+    if (capacidadCajaTotal < capacidadPrepTotal) {
+        cuelloBotella = "Caja (Atención al cliente)";
+    } else if (capacidadPrepTotal < capacidadCajaTotal) {
+        cuelloBotella = "Preparación (Baristas)";
+    } else {
+        cuelloBotella = "Sistema Equilibrado";
+    }
+
+    // 4. Pintar resultados en la interfaz web
+    document.getElementById('resPedidos').innerText = clientesEntregados;
+    document.getElementById('resRendimiento').innerText = clientesEntregados + " ped/h";
+    document.getElementById('resCosto').innerText = "$ " + costoTotalLaboral.toLocaleString();
+    document.getElementById('resBeneficio').innerText = "$ " + resultadoEconomico.toLocaleString();
+
+    document.getElementById('resCuelloBotella').innerHTML = `
+        <strong>Análisis Operativo:</strong> El cuello de botella actual se encuentra en <strong>${cuelloBotella}</strong>.<br>
+        <em>Capacidad teórica máxima:</em> Caja = ${Math.round(capacidadCajaTotal)} ped/h | Preparación = ${Math.round(capacidadPrepTotal)} ped/h. 
+        Con una demanda de ${tasaLlegada} clientes/h, el sistema procesó ${clientesEntregados} pedidos en la hora simulada.
+    `;
+}
+
+// Ejecutar una vez al cargar por defecto
+window.onload = ejecutarSimulacion;
+</script>
+
+</body>
+</html>
